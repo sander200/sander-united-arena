@@ -1,0 +1,12 @@
+{
+  "name": "sander-united-arena",
+  "version": "1.0.0",
+  "engine": "HTML5 Canvas + Web Audio API",
+  "difficulty": [
+    "easy",
+    "normal",
+    "hard"
+  ],
+  "timerSeconds": 180,
+  "teleportCooldownSeconds": 30
+}
