@@ -1,1746 +1,434 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Sander United Arena — Estação Paulista</title>
+  <meta charset="utf-8">
 
-<style>
-html,body{
-  margin:0;
-  background:#071018;
-  color:#fff;
-  font-family:monospace;
-  overflow:hidden
-}
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"
+  >
 
-#wrap{
-  width:100vw;
-  height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center
-}
+  <title>Sander United Arena</title>
 
-canvas{
-  image-rendering:auto;
-  max-width:100vw;
-  max-height:100vh;
-  border:4px solid #17202a;
-  box-shadow:0 0 0 4px #59636d
-}
+  <meta
+    name="description"
+    content="Sander United Arena — combate de Sander contra Némesis na Estação Paulista."
+  >
 
-#help{
-  position:fixed;
-  left:10px;
-  bottom:10px;
-  background:#000c;
-  padding:8px 10px;
-  border:2px solid #fff;
-  font-size:13px
-}
-</style>
+  <meta name="theme-color" content="#071525">
+
+  <link rel="stylesheet" href="styles.css">
 </head>
 
 <body>
 
-<div id="wrap">
-  <canvas id="game" width="1536" height="952"></canvas>
-</div>
+<main id="game-shell">
 
-<div id="help">
-  SETAS / WASD = mover • ENTER = iniciar • R = reiniciar
-</div>
+  <!-- =========================================================
+       JUEGO PRINCIPAL
+       La cámara del juego será controlada por game.js.
+       Sander permanece cerca del centro mientras el mapa se desplaza.
+  ========================================================== -->
 
-<script>
-"use strict";
+  <section id="game-view">
 
-/* =========================================================
-   SANDER UNITED ARENA
-   MAPA: ESTAÇÃO PAULISTA
-   ========================================================= */
+    <canvas
+      id="game"
+      aria-label="Sander United Arena"
+    ></canvas>
 
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+    <!-- =====================================================
+         MINIMAPA COMPLETO
+         Muestra todo el escenario y las posiciones de ambos.
+    ====================================================== -->
 
-ctx.imageSmoothingEnabled = true;
+    <div id="minimap-container">
 
-const W = 1536;
-const H = 952;
+      <div class="minimap-header">
+        <span>MAPA</span>
+        <span id="minimapStage">ESTAÇÃO PAULISTA</span>
+      </div>
 
-/* =========================================================
-   MAPA
-   ========================================================= */
+      <canvas
+        id="minimap"
+        aria-label="Mapa completo da arena"
+      ></canvas>
 
-const bg = new Image();
+      <!-- Marcadores controlados por game.js -->
 
-bg.src = "mapa_estacao_paulista.png";
+      <div
+        id="sander-marker"
+        class="map-marker sander-marker"
+        aria-label="Sander"
+      >
+        S
+      </div>
 
-/*
-  Criamos uma cópia invisível do mapa.
-  Ela será usada para detectar automaticamente
-  as áreas amarelas/ocres dos caminhos.
-*/
+      <div
+        id="nemesis-marker"
+        class="map-marker nemesis-marker"
+        aria-label="Némesis"
+      >
+        N
+      </div>
 
-const mapCanvas = document.createElement("canvas");
+      <div class="minimap-legend">
+        <span><i class="legend-sander"></i>SANDER</span>
+        <span><i class="legend-nemesis"></i>NÉMESIS</span>
+      </div>
 
-mapCanvas.width = W;
-mapCanvas.height = H;
+    </div>
 
-const mapCtx = mapCanvas.getContext(
-  "2d",
-  {willReadFrequently:true}
-);
+    <!-- =====================================================
+         INDICADOR DE CÁMARA
+    ====================================================== -->
 
-let mapPixels = null;
-let mapReady = false;
+    <div id="camera-indicator">
+      <span>●</span> ÁREA DE COMBATE
+    </div>
 
+  </section>
 
-/* =========================================================
-   ZONAS SEGURAS
-   ========================================================= */
 
-const safeZones = [
+  <!-- =========================================================
+       INTRO
+  ========================================================== -->
 
-  /* início */
-  {
-    x:125,
-    y:145,
-    r:42
-  },
+  <section id="intro" class="screen">
 
-  /* chegada */
-  {
-    x:1400,
-    y:875,
-    r:48
-  }
+    <div class="intro-aura"></div>
 
-];
+    <div class="intro-card">
 
+      <div class="eyebrow">
+        ARENA ORIGINAL • ESTÁGIO 1/3
+      </div>
 
-/* =========================================================
-   CONVERSÃO RGB → HSV
-   ========================================================= */
+      <h1>SANDERVERSE</h1>
 
-function rgbToHsv(r,g,b){
+      <p>SANDER UNITED ARENA</p>
 
-  r/=255;
-  g/=255;
-  b/=255;
+      <div class="intro-hero">
+        ⚡
+      </div>
 
-  const max=Math.max(r,g,b);
-  const min=Math.min(r,g,b);
+      <div class="intro-description">
+        <span>ENERGIA</span>
+        <span>COMBATE</span>
+        <span>EVOLUÇÃO</span>
+      </div>
 
-  const d=max-min;
+      <button id="startBtn">
+        ENTRAR NA ARENA
+      </button>
 
-  let h=0;
+    </div>
 
-  if(d){
+  </section>
 
-    if(max===r)
-      h=((g-b)/d)%6;
 
-    else if(max===g)
-      h=(b-r)/d+2;
+  <!-- =========================================================
+       ESCOLHA DE DIFICULDADE
+  ========================================================== -->
 
-    else
-      h=(r-g)/d+4;
+  <section id="difficulty" class="screen hidden">
 
-    h*=60;
+    <div class="panel">
 
-    if(h<0)
-      h+=360;
+      <div class="eyebrow">
+        ESCOLHA A DIFICULDADE
+      </div>
 
-  }
+      <h2>Preparar confronto</h2>
 
-  const s=max===0 ? 0 : d/max;
+      <div class="difficulty-grid">
 
-  return [
-    h,
-    s,
-    max
-  ];
-}
+        <button data-difficulty="easy">
+          <b>BÁSICO</b>
+          <span>Némesis equilibrado</span>
+        </button>
 
+        <button data-difficulty="normal">
+          <b>MÉDIO</b>
+          <span>Experiência recomendada</span>
+        </button>
 
-/* =========================================================
-   DETECÇÃO DOS CAMINHOS
-   ========================================================= */
+        <button data-difficulty="hard">
+          <b>DIFÍCIL</b>
+          <span>IA agressiva + mais resistência</span>
+        </button>
 
-function isRoadPixel(x,y){
+      </div>
 
-  x=Math.max(
-    0,
-    Math.min(W-1,x|0)
-  );
+      <p class="tip">
+        3 minutos • sem pontuação •
+        vença reduzindo a energia do Némesis a zero.
+      </p>
 
-  y=Math.max(
-    0,
-    Math.min(H-1,y|0)
-  );
+    </div>
 
-  const i=(y*W+x)*4;
+  </section>
 
-  const r=mapPixels[i];
-  const g=mapPixels[i+1];
-  const b=mapPixels[i+2];
 
-  const [
-    h,
-    s,
-    v
-  ]=rgbToHsv(r,g,b);
+  <!-- =========================================================
+       HUD
+  ========================================================== -->
 
+  <section id="hud" class="hidden">
 
-  /*
-    Caminhos amarelos/ocres
-  */
+    <div class="topbar">
 
-  const yellowRoad =
-    h>=25 &&
-    h<=52 &&
-    s>=0.20 &&
-    v>=0.48;
+      <button
+        id="pauseBtn"
+        class="mini"
+        aria-label="Pausar"
+      >
+        Ⅱ
+      </button>
 
+      <div class="stage">
+        STAGE <b>1/3</b>
+      </div>
 
-  /*
-    Alguns trechos são mais claros
-    e menos saturados.
-  */
 
-  const beigeRoad =
-    h>=20 &&
-    h<=55 &&
-    s>=0.12 &&
-    v>=0.62 &&
-    r>=g*0.92 &&
-    g>=b*1.05;
+      <!-- VIDA SANDER -->
 
+      <div class="meter-block">
 
-  return yellowRoad || beigeRoad;
-}
+        <span>❤️</span>
 
+        <div class="meter">
+          <i id="sanderHp"></i>
+        </div>
 
-/* =========================================================
-   ZONAS SEGURAS
-   ========================================================= */
+      </div>
 
-function inSafeZone(x,y){
 
-  return safeZones.some(z =>
+      <!-- CRONÓMETRO -->
 
-    Math.hypot(
-      x-z.x,
-      y-z.y
-    ) <= z.r
+      <div id="timer">
+        03:00
+      </div>
 
-  );
-}
 
+      <!-- ENERGÍA SANDER -->
 
-/* =========================================================
-   COLISÃO COM O BOSQUE
-   ========================================================= */
+      <div class="meter-block energy">
 
-/*
-  Testamos vários pontos ao redor do personagem.
+        <span>⚡</span>
 
-  Isso impede que apenas o centro esteja no caminho
-  enquanto o resto do personagem esteja dentro do bosque.
-*/
+        <div class="meter">
+          <i id="sanderEnergy"></i>
+        </div>
 
-function onWalkableArea(x,y,r){
+      </div>
 
-  if(!mapReady)
-    return true;
 
-  if(inSafeZone(x,y))
-    return true;
+      <!-- VIDA NÉMESIS -->
 
+      <div class="meter-block enemy">
 
-  const samples=16;
+        <span>☠</span>
 
-  const inner=Math.max(
-    2,
-    r-2
-  );
+        <div class="meter">
+          <i id="nemesisHp"></i>
+        </div>
 
+      </div>
 
-  for(
-    let i=0;
-    i<samples;
-    i++
-  ){
 
-    const a=
-      (Math.PI*2*i)/
-      samples;
+      <button
+        id="soundBtn"
+        class="mini"
+        aria-label="Som"
+      >
+        🔊
+      </button>
 
-    const px=
-      x+
-      Math.cos(a)*
-      inner;
+    </div>
 
-    const py=
-      y+
-      Math.sin(a)*
-      inner;
 
+    <!-- ESTADO DEL TELEPORTE -->
 
-    /*
-      Limites do mapa
-    */
+    <div id="teleportStatus">
+      TELEPORTE: PRONTO
+    </div>
 
-    if(
-      px<4 ||
-      py<4 ||
-      px>=W-4 ||
-      py>=H-4
-    ){
 
-      return false;
+    <!-- MENSAJES DEL JUEGO -->
 
-    }
+    <div id="message"></div>
 
 
-    /*
-      Se algum ponto estiver
-      fora do caminho, bloqueia.
-    */
+    <!-- INFORMACIÓN DE DISTANCIA -->
 
-    if(!isRoadPixel(px,py))
-      return false;
+    <div id="combatInfo">
 
-  }
+      <span id="distanceInfo">
+        NÉMESIS: --
+      </span>
 
+      <span id="energyInfo">
+        ENERGIA: 0
+      </span>
 
-  return (
-    isRoadPixel(x,y) ||
-    inSafeZone(x,y)
-  );
+    </div>
 
-}
+  </section>
 
 
-/* =========================================================
-   CONTROLES
-   ========================================================= */
+  <!-- =========================================================
+       CONTROLES MÓVILES
+  ========================================================== -->
 
-const keys={};
+  <section id="touch" class="hidden">
 
-addEventListener(
-  "keydown",
-  e=>{
+    <!-- JOYSTICK / DIRECCIONES -->
 
-    const k=
-      e.key.toLowerCase();
+    <div class="dpad">
 
-    keys[k]=true;
+      <button
+        data-key="ArrowUp"
+        aria-label="Mover para cima"
+      >
+        ▲
+      </button>
 
+      <button
+        data-key="ArrowLeft"
+        aria-label="Mover para esquerda"
+      >
+        ◀
+      </button>
 
-    if([
-      "arrowup",
-      "arrowdown",
-      "arrowleft",
-      "arrowright",
-      " "
-    ].includes(k)){
+      <button
+        data-key="ArrowDown"
+        aria-label="Mover para baixo"
+      >
+        ▼
+      </button>
 
-      e.preventDefault();
+      <button
+        data-key="ArrowRight"
+        aria-label="Mover para direita"
+      >
+        ▶
+      </button>
 
-    }
+    </div>
 
 
-    if(
-      e.key==="Enter" &&
-      state==="ready"
-    ){
+    <!-- ATAQUES -->
 
-      state="play";
+    <div class="actions">
 
-    }
+      <button
+        data-key="z"
+        class="attack"
+        aria-label="Ataque básico"
+      >
+        Z
+        <br>
+        <small>ATAQUE</small>
+      </button>
 
 
-    if(k==="r")
-      reset();
+      <button
+        data-key="x"
+        class="special"
+        aria-label="Ataque especial"
+      >
+        X
+        <br>
+        <small>ESPECIAL</small>
+      </button>
 
-  }
-);
 
+      <button
+        data-key="c"
+        class="teleport"
+        aria-label="Teletransporte"
+      >
+        C
+        <br>
+        <small>TELEPORT</small>
+      </button>
 
-addEventListener(
-  "keyup",
-  e=>{
+    </div>
 
-    keys[
-      e.key.toLowerCase()
-    ]=false;
+  </section>
 
-  }
-);
 
+  <!-- =========================================================
+       PAUSA
+  ========================================================== -->
 
-/* =========================================================
-   ESTADO DO JOGO
-   ========================================================= */
+  <section
+    id="pause"
+    class="overlay hidden"
+  >
 
-let state="ready";
+    <div class="panel">
 
-let win=false;
+      <h2>PAUSADO</h2>
 
+      <button id="resumeBtn">
+        CONTINUAR
+      </button>
 
-/* =========================================================
-   INÍCIO E FIM
-   ========================================================= */
+    </div>
 
-const start={
-  x:125,
-  y:145
-};
+  </section>
 
-const finish={
-  x:1400,
-  y:875
-};
 
+  <!-- =========================================================
+       RESULTADO
+  ========================================================== -->
 
-/* =========================================================
-   SANDER
-   ========================================================= */
+  <section
+    id="result"
+    class="overlay hidden"
+  >
 
-const player={
+    <div class="panel">
 
-  x:start.x,
-  y:start.y,
+      <div id="resultIcon">
+        🏆
+      </div>
 
-  r:13,
+      <h2 id="resultTitle">
+        VITÓRIA!
+      </h2>
 
-  speed:3.2,
+      <p id="resultText"></p>
 
-  energy:0,
+      <button id="restartBtn">
+        JOGAR NOVAMENTE
+      </button>
 
-  maxEnergy:100
+    </div>
 
-};
+  </section>
 
 
-/* =========================================================
-   NÉMESIS
-   ========================================================= */
+  <!-- =========================================================
+       ELEMENTOS DE ACESSIBILIDADE / ESTADO
+  ========================================================== -->
 
-const nemesis={
+  <div
+    id="game-status"
+    aria-live="polite"
+    aria-atomic="true"
+  ></div>
 
-  x:1090,
-  y:180,
+</main>
 
-  r:17,
 
-  speed:2.15,
+<!-- ===========================================================
+     GAME ENGINE
+=========================================================== -->
 
-  energy:35,
-
-  maxEnergy:100,
-
-  target:null,
-
-  targetTimer:0,
-
-  dirX:0,
-
-  dirY:1
-
-};
-
-
-/* =========================================================
-   GEMAS / ENERGIA
-   ========================================================= */
-
-const energyNodes=[
-
-  {x:420,y:205,taken:false},
-
-  {x:1170,y:155,taken:false},
-
-  {x:1415,y:285,taken:false},
-
-  {x:360,y:390,taken:false},
-
-  {x:515,y:565,taken:false},
-
-  {x:800,y:390,taken:false},
-
-  {x:1130,y:535,taken:false},
-
-  {x:1310,y:715,taken:false},
-
-  {x:490,y:790,taken:false},
-
-  {x:870,y:820,taken:false}
-
-];
-
-
-/* =========================================================
-   RESET
-   ========================================================= */
-
-function reset(){
-
-  player.x=start.x;
-  player.y=start.y;
-
-  player.energy=0;
-
-
-  nemesis.x=1090;
-  nemesis.y=180;
-
-  nemesis.energy=35;
-
-  nemesis.target=null;
-
-
-  energyNodes.forEach(
-    n=>n.taken=false
-  );
-
-
-  state="ready";
-
-  win=false;
-
-}
-
-
-/* =========================================================
-   MOVIMENTO DE SANDER
-   ========================================================= */
-
-function movePlayer(){
-
-  let dx=0;
-  let dy=0;
-
-
-  if(
-    keys.arrowleft ||
-    keys.a
-  )
-    dx--;
-
-
-  if(
-    keys.arrowright ||
-    keys.d
-  )
-    dx++;
-
-
-  if(
-    keys.arrowup ||
-    keys.w
-  )
-    dy--;
-
-
-  if(
-    keys.arrowdown ||
-    keys.s
-  )
-    dy++;
-
-
-  if(!dx && !dy)
-    return;
-
-
-  /*
-    Normaliza movimento diagonal.
-  */
-
-  const len=
-    Math.hypot(dx,dy);
-
-  dx/=len;
-  dy/=len;
-
-
-  const nx=
-    player.x+
-    dx*
-    player.speed;
-
-
-  const ny=
-    player.y+
-    dy*
-    player.speed;
-
-
-  /*
-    Colisão horizontal.
-  */
-
-  if(
-    onWalkableArea(
-      nx,
-      player.y,
-      player.r
-    )
-  ){
-
-    player.x=nx;
-
-  }
-
-
-  /*
-    Colisão vertical.
-  */
-
-  if(
-    onWalkableArea(
-      player.x,
-      ny,
-      player.r
-    )
-  ){
-
-    player.y=ny;
-
-  }
-
-
-  collectEnergy(player);
-
-}
-
-
-/* =========================================================
-   IA DO NÉMESIS
-   ========================================================= */
-
-function chooseNemesisTarget(){
-
-  let best=null;
-
-  let bestD=Infinity;
-
-
-  for(
-    const node of energyNodes
-  ){
-
-    if(node.taken)
-      continue;
-
-
-    const d=
-      Math.hypot(
-        node.x-nemesis.x,
-        node.y-nemesis.y
-      );
-
-
-    if(d<bestD){
-
-      bestD=d;
-      best=node;
-
-    }
-
-  }
-
-
-  nemesis.target=best;
-
-}
-
-
-/* =========================================================
-   MOVIMENTO DO NÉMESIS
-   ========================================================= */
-
-function moveNemesis(){
-
-  nemesis.targetTimer--;
-
-
-  /*
-    Escolhe nova energia.
-  */
-
-  if(
-    !nemesis.target ||
-    nemesis.target.taken ||
-    nemesis.targetTimer<=0
-  ){
-
-    chooseNemesisTarget();
-
-    nemesis.targetTimer=45;
-
-  }
-
-
-  if(!nemesis.target)
-    return;
-
-
-  let dx=
-    nemesis.target.x-
-    nemesis.x;
-
-  let dy=
-    nemesis.target.y-
-    nemesis.y;
-
-
-  const d=
-    Math.hypot(dx,dy);
-
-
-  if(d<24){
-
-    collectEnergy(nemesis);
-
-    nemesis.target=null;
-
-    return;
-
-  }
-
-
-  dx/=d;
-  dy/=d;
-
-
-  const speed=
-    nemesis.speed;
-
-
-  const nx=
-    nemesis.x+
-    dx*
-    speed;
-
-
-  const ny=
-    nemesis.y+
-    dy*
-    speed;
-
-
-  /*
-    Primeiro tenta horizontal.
-  */
-
-  if(
-    onWalkableArea(
-      nx,
-      nemesis.y,
-      nemesis.r
-    )
-  ){
-
-    nemesis.x=nx;
-
-    nemesis.dirX=dx;
-
-    nemesis.dirY=0;
-
-  }
-
-
-  /*
-    Depois tenta vertical.
-  */
-
-  else if(
-    onWalkableArea(
-      nemesis.x,
-      ny,
-      nemesis.r
-    )
-  ){
-
-    nemesis.y=ny;
-
-    nemesis.dirX=0;
-
-    nemesis.dirY=dy;
-
-  }
-
-
-  /*
-    Se estiver bloqueado,
-    tenta caminhos alternativos.
-  */
-
-  else{
-
-    const alternatives=[
-
-      [dy,-dx],
-
-      [-dy,dx],
-
-      [-dx,-dy]
-
-    ];
-
-
-    let moved=false;
-
-
-    for(
-      const [ax,ay]
-      of alternatives
-    ){
-
-      const tx=
-        nemesis.x+
-        ax*
-        speed;
-
-
-      const ty=
-        nemesis.y+
-        ay*
-        speed;
-
-
-      if(
-        onWalkableArea(
-          tx,
-          nemesis.y,
-          nemesis.r
-        )
-      ){
-
-        nemesis.x=tx;
-
-        nemesis.dirX=ax;
-
-        nemesis.dirY=0;
-
-        moved=true;
-
-        break;
-
-      }
-
-
-      if(
-        onWalkableArea(
-          nemesis.x,
-          ty,
-          nemesis.r
-        )
-      ){
-
-        nemesis.y=ty;
-
-        nemesis.dirX=0;
-
-        nemesis.dirY=ay;
-
-        moved=true;
-
-        break;
-
-      }
-
-    }
-
-
-    if(!moved)
-      nemesis.targetTimer=0;
-
-  }
-
-
-  collectEnergy(nemesis);
-
-}
-
-
-/* =========================================================
-   COLETA DE ENERGIA
-   ========================================================= */
-
-function collectEnergy(entity){
-
-  for(
-    const node of energyNodes
-  ){
-
-    if(node.taken)
-      continue;
-
-
-    if(
-      Math.hypot(
-        entity.x-node.x,
-        entity.y-node.y
-      )<28
-    ){
-
-      node.taken=true;
-
-
-      entity.energy=
-        Math.min(
-          entity.maxEnergy,
-          entity.energy+20
-        );
-
-    }
-
-  }
-
-}
-
-
-/* =========================================================
-   DESENHAR SANDER
-   ========================================================= */
-
-function drawPlayer(){
-
-  ctx.save();
-
-  ctx.translate(
-    player.x,
-    player.y
-  );
-
-
-  /*
-    sombra
-  */
-
-  ctx.fillStyle="#0008";
-
-  ctx.beginPath();
-
-  ctx.ellipse(
-    0,
-    13,
-    17,
-    6,
-    0,
-    0,
-    Math.PI*2
-  );
-
-  ctx.fill();
-
-
-  /*
-    pernas
-  */
-
-  ctx.fillStyle="#151a24";
-
-  ctx.fillRect(
-    -10,
-    7,
-    8,
-    16
-  );
-
-  ctx.fillRect(
-    2,
-    7,
-    8,
-    16
-  );
-
-
-  /*
-    tênis
-  */
-
-  ctx.fillStyle="#1267c8";
-
-  ctx.fillRect(
-    -12,
-    20,
-    11,
-    6
-  );
-
-  ctx.fillRect(
-    2,
-    20,
-    13,
-    6
-  );
-
-
-  /*
-    jaqueta azul
-  */
-
-  ctx.fillStyle="#1467d8";
-
-  ctx.fillRect(
-    -13,
-    -7,
-    26,
-    20
-  );
-
-
-  /*
-    camiseta
-  */
-
-  ctx.fillStyle="#11151c";
-
-  ctx.fillRect(
-    -8,
-    -5,
-    16,
-    14
-  );
-
-
-  /*
-    SANDERVERSE
-  */
-
-  ctx.fillStyle="#69d8ff";
-
-  ctx.font="bold 4px Arial";
-
-  ctx.textAlign="center";
-
-  ctx.fillText(
-    "SANDERVERSE",
-    0,
-    3
-  );
-
-
-  /*
-    cabeça
-  */
-
-  ctx.fillStyle="#f0ad78";
-
-  ctx.fillRect(
-    -8,
-    -21,
-    16,
-    14
-  );
-
-
-  /*
-    cabelo
-  */
-
-  ctx.fillStyle="#2c1c17";
-
-  ctx.fillRect(
-    -9,
-    -24,
-    18,
-    6
-  );
-
-  ctx.fillRect(
-    -10,
-    -20,
-    4,
-    5
-  );
-
-
-  /*
-    fones
-  */
-
-  ctx.strokeStyle="#1e7cff";
-
-  ctx.lineWidth=3;
-
-  ctx.beginPath();
-
-  ctx.arc(
-    0,
-    -15,
-    13,
-    Math.PI,
-    Math.PI*2
-  );
-
-  ctx.stroke();
-
-
-  ctx.fillStyle="#1e7cff";
-
-  ctx.fillRect(
-    -14,
-    -17,
-    4,
-    9
-  );
-
-  ctx.fillRect(
-    10,
-    -17,
-    4,
-    9
-  );
-
-
-  ctx.restore();
-
-}
-
-
-/* =========================================================
-   DESENHAR NÉMESIS
-   ========================================================= */
-
-function drawNemesis(){
-
-  ctx.save();
-
-  ctx.translate(
-    nemesis.x,
-    nemesis.y
-  );
-
-
-  /*
-    sombra
-  */
-
-  ctx.fillStyle="#0008";
-
-  ctx.beginPath();
-
-  ctx.ellipse(
-    0,
-    17,
-    20,
-    7,
-    0,
-    0,
-    Math.PI*2
-  );
-
-  ctx.fill();
-
-
-  /*
-    corpo da calopsita
-  */
-
-  ctx.fillStyle="#eee";
-
-  ctx.beginPath();
-
-  ctx.ellipse(
-    0,
-    0,
-    16,
-    22,
-    0,
-    0,
-    Math.PI*2
-  );
-
-  ctx.fill();
-
-
-  /*
-    asas
-  */
-
-  ctx.fillStyle="#d7d7d7";
-
-  ctx.beginPath();
-
-  ctx.moveTo(-12,2);
-
-  ctx.lineTo(-27,12);
-
-  ctx.lineTo(-15,-5);
-
-  ctx.fill();
-
-
-  ctx.beginPath();
-
-  ctx.moveTo(12,2);
-
-  ctx.lineTo(27,12);
-
-  ctx.lineTo(15,-5);
-
-  ctx.fill();
-
-
-  /*
-    crista
-  */
-
-  ctx.fillStyle="#9fe9ff";
-
-  ctx.beginPath();
-
-  ctx.moveTo(-8,-16);
-
-  ctx.lineTo(-3,-30);
-
-  ctx.lineTo(1,-17);
-
-  ctx.lineTo(6,-29);
-
-  ctx.lineTo(8,-14);
-
-  ctx.fill();
-
-
-  /*
-    olho
-  */
-
-  ctx.fillStyle="#222";
-
-  ctx.beginPath();
-
-  ctx.arc(
-    -6,
-    -7,
-    3,
-    0,
-    Math.PI*2
-  );
-
-  ctx.fill();
-
-
-  /*
-    bico
-  */
-
-  ctx.fillStyle="#c9a66b";
-
-  ctx.beginPath();
-
-  ctx.moveTo(7,-5);
-
-  ctx.lineTo(18,0);
-
-  ctx.lineTo(7,4);
-
-  ctx.fill();
-
-
-  /*
-    armadura
-  */
-
-  ctx.strokeStyle="#c9a34a";
-
-  ctx.lineWidth=3;
-
-  ctx.strokeRect(
-    -16,
-    -5,
-    32,
-    25
-  );
-
-
-  ctx.restore();
-
-}
-
-
-/* =========================================================
-   ENERGIA
-   ========================================================= */
-
-function drawEnergy(){
-
-  for(
-    const n of energyNodes
-  ){
-
-    if(n.taken)
-      continue;
-
-
-    const pulse=
-      1+
-      Math.sin(
-        performance.now()/180+
-        n.x
-      )*.12;
-
-
-    ctx.save();
-
-    ctx.translate(
-      n.x,
-      n.y
-    );
-
-    ctx.scale(
-      pulse,
-      pulse
-    );
-
-
-    ctx.fillStyle="#ffdb35";
-
-    ctx.beginPath();
-
-    ctx.arc(
-      0,
-      0,
-      7,
-      0,
-      Math.PI*2
-    );
-
-    ctx.fill();
-
-
-    ctx.strokeStyle="#fff3a0";
-
-    ctx.lineWidth=2;
-
-    ctx.stroke();
-
-
-    ctx.restore();
-
-  }
-
-}
-
-
-/* =========================================================
-   HUD
-   ========================================================= */
-
-function drawHUD(){
-
-  /*
-    painel
-  */
-
-  ctx.fillStyle="#101827e8";
-
-  ctx.fillRect(
-    16,
-    16,
-    350,
-    74
-  );
-
-
-  ctx.strokeStyle="#6ea8ff";
-
-  ctx.strokeRect(
-    16,
-    16,
-    350,
-    74
-  );
-
-
-  /*
-    título
-  */
-
-  ctx.fillStyle="#fff";
-
-  ctx.font="bold 20px monospace";
-
-  ctx.textAlign="left";
-
-  ctx.fillText(
-    "SANDER UNITED ARENA",
-    30,
-    42
-  );
-
-
-  /*
-    energia Sander
-  */
-
-  ctx.font="14px monospace";
-
-  ctx.fillText(
-    "ENERGIA",
-    30,
-    67
-  );
-
-
-  ctx.fillStyle="#26344a";
-
-  ctx.fillRect(
-    105,
-    56,
-    150,
-    12
-  );
-
-
-  ctx.fillStyle="#35d7ff";
-
-  ctx.fillRect(
-    105,
-    56,
-    150*
-    (
-      player.energy/
-      player.maxEnergy
-    ),
-    12
-  );
-
-
-  /*
-    energia Némesis
-  */
-
-  ctx.fillStyle="#fff";
-
-  ctx.fillText(
-    "NÉMESIS",
-    270,
-    67
-  );
-
-
-  ctx.fillStyle="#26344a";
-
-  ctx.fillRect(
-    270,
-    74,
-    75,
-    7
-  );
-
-
-  ctx.fillStyle="#ff6b6b";
-
-  ctx.fillRect(
-    270,
-    74,
-    75*
-    (
-      nemesis.energy/
-      nemesis.maxEnergy
-    ),
-    7
-  );
-
-}
-
-
-/* =========================================================
-   TELAS
-   ========================================================= */
-
-function overlay(){
-
-  /*
-    Tela inicial
-  */
-
-  if(state==="ready"){
-
-    ctx.fillStyle="#000b";
-
-    ctx.fillRect(
-      0,
-      0,
-      W,
-      H
-    );
-
-
-    ctx.fillStyle="#fff";
-
-    ctx.textAlign="center";
-
-
-    ctx.font="bold 48px monospace";
-
-    ctx.fillText(
-      "SANDER UNITED ARENA",
-      W/2,
-      385
-    );
-
-
-    ctx.font="bold 28px monospace";
-
-    ctx.fillText(
-      "ESTAÇÃO PAULISTA",
-      W/2,
-      430
-    );
-
-
-    ctx.font="20px monospace";
-
-    ctx.fillText(
-      "ENTER para começar",
-      W/2,
-      480
-    );
-
-  }
-
-
-  /*
-    Vitória
-  */
-
-  if(state==="win"){
-
-    ctx.fillStyle="#000c";
-
-    ctx.fillRect(
-      0,
-      0,
-      W,
-      H
-    );
-
-
-    ctx.fillStyle="#ffe44d";
-
-    ctx.textAlign="center";
-
-    ctx.font="bold 54px monospace";
-
-    ctx.fillText(
-      "FASE CONCLUÍDA!",
-      W/2,
-      420
-    );
-
-
-    ctx.fillStyle="#fff";
-
-    ctx.font="24px monospace";
-
-    ctx.fillText(
-      "Você chegou ao FIM.",
-      W/2,
-      465
-    );
-
-
-    ctx.fillText(
-      "R para jogar novamente",
-      W/2,
-      510
-    );
-
-  }
-
-}
-
-
-/* =========================================================
-   ATUALIZAÇÃO
-   ========================================================= */
-
-function update(){
-
-  if(state!=="play")
-    return;
-
-
-  movePlayer();
-
-  moveNemesis();
-
-
-  /*
-    Chegada
-  */
-
-  if(
-    Math.hypot(
-      player.x-finish.x,
-      player.y-finish.y
-    )<42
-  ){
-
-    win=true;
-
-    state="win";
-
-  }
-
-}
-
-
-/* =========================================================
-   RENDER
-   ========================================================= */
-
-function render(){
-
-  ctx.clearRect(
-    0,
-    0,
-    W,
-    H
-  );
-
-
-  /*
-    mapa
-  */
-
-  ctx.drawImage(
-    bg,
-    0,
-    0,
-    W,
-    H
-  );
-
-
-  /*
-    energia
-  */
-
-  drawEnergy();
-
-
-  /*
-    Némesis
-  */
-
-  drawNemesis();
-
-
-  /*
-    Sander
-  */
-
-  drawPlayer();
-
-
-  /*
-    interface
-  */
-
-  drawHUD();
-
-
-  /*
-    telas
-  */
-
-  overlay();
-
-}
-
-
-/* =========================================================
-   LOOP PRINCIPAL
-   ========================================================= */
-
-function loop(){
-
-  update();
-
-  render();
-
-  requestAnimationFrame(loop);
-
-}
-
-
-/* =========================================================
-   CARREGAMENTO DO MAPA
-   ========================================================= */
-
-bg.onload=()=>{
-
-  /*
-    Copia o mapa para a máscara.
-  */
-
-  mapCtx.clearRect(
-    0,
-    0,
-    W,
-    H
-  );
-
-
-  mapCtx.drawImage(
-    bg,
-    0,
-    0,
-    W,
-    H
-  );
-
-
-  /*
-    Lê os pixels.
-  */
-
-  mapPixels=
-    mapCtx.getImageData(
-      0,
-      0,
-      W,
-      H
-    ).data;
-
-
-  mapReady=true;
-
-
-  /*
-    Inicia o jogo.
-  */
-
-  loop();
-
-};
-
-
-/* =========================================================
-   ERRO DE MAPA
-   ========================================================= */
-
-bg.onerror=()=>{
-
-  document.getElementById(
-    "help"
-  ).textContent=
-    "ERRO: coloque mapa_estacao_paulista.png na mesma pasta do index.html";
-
-};
-
-</script>
+<script src="game.js"></script>
 
 </body>
 </html>
